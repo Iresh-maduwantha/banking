@@ -1,0 +1,721 @@
+openapi: 3.0.0
+info:
+  title: Banking SaaS Application API
+  description: API documentation for the Banking SaaS Application
+  version: 1.0.0
+  contact:
+    name: Banking SaaS Team
+    email: support@bankingsaas.com
+    url: https://bankingsaas.com
+
+servers:
+  - url: https://api.bankingsaas.com/v1
+    description: Production server
+  - url: https://staging-api.bankingsaas.com/v1
+    description: Staging server
+  - url: https://dev-api.bankingsaas.com/v1
+    description: Development server
+
+tags:
+  - name: Authentication
+    description: Operations related to user authentication
+  - name: Users
+    description: Operations related to user management
+  - name: Accounts
+    description: Operations related to bank accounts
+  - name: Transactions
+    description: Operations related to financial transactions
+  - name: Cards
+    description: Operations related to debit/credit cards
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the user
+        email:
+          type: string
+          format: email
+          description: User's email address
+        firstName:
+          type: string
+          description: User's first name
+        lastName:
+          type: string
+          description: User's last name
+        createdAt:
+          type: string
+          format: date-time
+          description: Date and time when the user was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: Date and time when the user was last updated
+      required:
+        - id
+        - email
+        - firstName
+        - lastName
+        - createdAt
+        - updatedAt
+    
+    Account:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the account
+        userId:
+          type: string
+          format: uuid
+          description: ID of the user who owns the account
+        accountNumber:
+          type: string
+          description: Bank account number
+        accountType:
+          type: string
+          enum: [checking, savings, investment]
+          description: Type of bank account
+        balance:
+          type: number
+          format: float
+          description: Current balance of the account
+        currency:
+          type: string
+          enum: [USD, EUR, GBP]
+          description: Currency of the account
+        createdAt:
+          type: string
+          format: date-time
+          description: Date and time when the account was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: Date and time when the account was last updated
+      required:
+        - id
+        - userId
+        - accountNumber
+        - accountType
+        - balance
+        - currency
+        - createdAt
+        - updatedAt
+    
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the transaction
+        accountId:
+          type: string
+          format: uuid
+          description: ID of the account involved in the transaction
+        type:
+          type: string
+          enum: [deposit, withdrawal, transfer]
+          description: Type of transaction
+        amount:
+          type: number
+          format: float
+          description: Amount of the transaction
+        currency:
+          type: string
+          enum: [USD, EUR, GBP]
+          description: Currency of the transaction
+        status:
+          type: string
+          enum: [pending, completed, failed]
+          description: Status of the transaction
+        description:
+          type: string
+          description: Description of the transaction
+        createdAt:
+          type: string
+          format: date-time
+          description: Date and time when the transaction was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: Date and time when the transaction was last updated
+      required:
+        - id
+        - accountId
+        - type
+        - amount
+        - currency
+        - status
+        - createdAt
+        - updatedAt
+    
+    Card:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the card
+        accountId:
+          type: string
+          format: uuid
+          description: ID of the account associated with the card
+        cardNumber:
+          type: string
+          description: Last 4 digits of the card number
+        cardType:
+          type: string
+          enum: [debit, credit]
+          description: Type of card
+        expiryDate:
+          type: string
+          format: date
+          description: Expiry date of the card
+        status:
+          type: string
+          enum: [active, inactive, blocked]
+          description: Status of the card
+        createdAt:
+          type: string
+          format: date-time
+          description: Date and time when the card was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: Date and time when the card was last updated
+      required:
+        - id
+        - accountId
+        - cardNumber
+        - cardType
+        - expiryDate
+        - status
+        - createdAt
+        - updatedAt
+    
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Error message
+        details:
+          type: object
+          description: Additional error details
+      required:
+        - code
+        - message
+
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user
+      description: Create a new user account
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: User's email address
+                password:
+                  type: string
+                  format: password
+                  description: User's password
+                firstName:
+                  type: string
+                  description: User's first name
+                lastName:
+                  type: string
+                  description: User's last name
+              required:
+                - email
+                - password
+                - firstName
+                - lastName
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Login user
+      description: Authenticate a user and return a JWT token
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: User's email address
+                password:
+                  type: string
+                  format: password
+                  description: User's password
+              required:
+                - email
+                - password
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    description: JWT token
+                  user:
+                    $ref: '#/components/schemas/User'
+                required:
+                  - token
+                  - user
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Logout user
+      description: Invalidate the current user's session
+      operationId: logoutUser
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Logout successful
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  
+  /users/me:
+    get:
+      tags:
+        - Users
+      summary: Get current user
+      description: Retrieve the current user's profile
+      operationId: getCurrentUser
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  
+  /users/me:
+    put:
+      tags:
+        - Users
+      summary: Update current user
+      description: Update the current user's profile
+      operationId: updateCurrentUser
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firstName:
+                  type: string
+                  description: User's first name
+                lastName:
+                  type: string
+                  description: User's last name
+              required:
+                - firstName
+                - lastName
+      responses:
+        '200':
+          description: User profile updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  
+  /accounts:
+    get:
+      tags:
+        - Accounts
+      summary: Get user accounts
+      description: Retrieve all accounts for the current user
+      operationId: getUserAccounts
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Accounts retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Account'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  
+  /accounts:
+    post:
+      tags:
+        - Accounts
+      summary: Create account
+      description: Create a new account for the current user
+      operationId: createAccount
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accountType:
+                  type: string
+                  enum: [checking, savings, investment]
+                  description: Type of bank account
+                currency:
+                  type: string
+                  enum: [USD, EUR, GBP]
+                  description: Currency of the account
+              required:
+                - accountType
+                - currency
+      responses:
+        '201':
+          description: Account created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  
+  /accounts/{accountId}:
+    get:
+      tags:
+        - Accounts
+      summary: Get account
+      description: Retrieve a specific account by ID
+      operationId: getAccount
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: accountId
+          in: path
+          description: ID of the account
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Account retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  
+  /accounts/{accountId}/transactions:
+    get:
+      tags:
+        - Transactions
+      summary: Get account transactions
+      description: Retrieve all transactions for a specific account
+      operationId: getAccountTransactions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: accountId
+          in: path
+          description: ID of the account
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          description: Maximum number of transactions to return
+          required: false
+          schema:
+            type: integer
+            default: 10
+        - name: offset
+          in: query
+          description: Number of transactions to skip
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Transactions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transactions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Transaction'
+                  total:
+                    type: integer
+                    description: Total number of transactions
+                required:
+                  - transactions
+                  - total
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  
+  /transactions:
+    post:
+      tags:
+        - Transactions
+      summary: Create transaction
+      description: Create a new transaction
+      operationId: createTransaction
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accountId:
+                  type: string
+                  format: uuid
+                  description: ID of the account involved in the transaction
+                type:
+                  type: string
+                  enum: [deposit, withdrawal, transfer]
+                  description: Type of transaction
+                amount:
+                  type: number
+                  format: float
+                  description: Amount of the transaction
+                description:
+                  type: string
+                  description: Description of the transaction
+              required:
+                - accountId
+                - type
+                - amount
+      responses:
+        '201':
+          description: Transaction created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  
+  /cards:
+    get:
+      tags:
+        - Cards
+      summary: Get user cards
+      description: Retrieve all cards for the current user
+      operationId: getUserCards
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Cards retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Card'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  
+  /cards:
+    post:
+      tags:
+        - Cards
+      summary: Create card
+      description: Create a new card for an account
+      operationId: createCard
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accountId:
+                  type: string
+                  format: uuid
+                  description: ID of the account to associate with the card
+                cardType:
+                  type: string
+                  enum: [debit, credit]
+                  description: Type of card
+              required:
+                - accountId
+                - cardType
+      responses:
+        '201':
+          description: Card created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error' 
