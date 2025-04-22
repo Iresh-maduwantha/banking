@@ -1,0 +1,52 @@
+name: Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    name: Test on Node.js ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [16.x, 18.x, 20.x]
+      cache: 'npm'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: |
+        cd banking-saas-app/frontend
+        npm ci
+    
+    - name: Run unit tests
+      run: |
+        cd banking-saas-app/frontend
+        npm run test:unit
+    
+    - name: Run integration tests
+      run: |
+        cd banking-saas-app/frontend
+        npm run test:integration
+    
+    - name: Run E2E tests
+      run: |
+        cd banking-saas-app/frontend
+        npm run test:e2e
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results-${{ matrix.node-version }}
+        path: banking-saas-app/frontend/coverage 

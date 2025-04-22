@@ -1,0 +1,73 @@
+name: Cache Dependencies & Artifacts
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    - cron: '0 0 * * 0'  # Run weekly on Sundays
+
+jobs:
+  cache:
+    name: Cache Dependencies & Artifacts
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18.x'
+        cache: 'npm'
+    
+    # Cache npm dependencies
+    - name: Cache npm dependencies
+      uses: actions/cache@v3
+      id: npm-cache
+      with:
+        path: |
+          banking-saas-app/frontend/node_modules
+          ~/.npm
+          ${{ github.workspace }}/.npm-cache
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+    
+    # Cache build artifacts
+    - name: Cache build artifacts
+      uses: actions/cache@v3
+      id: build-cache
+      with:
+        path: banking-saas-app/frontend/dist
+        key: ${{ runner.os }}-build-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-build-
+    
+    # Install dependencies
+    - name: Install dependencies
+      run: |
+        cd banking-saas-app/frontend
+        npm ci
+    
+    # Build the application
+    - name: Build application
+      run: |
+        cd banking-saas-app/frontend
+        npm run build
+    
+    # Upload build artifacts
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-artifacts
+        path: banking-saas-app/frontend/dist
+        retention-days: 7
+    
+    # Clean up old artifacts
+    - name: Clean up old artifacts
+      uses: c-hive/gha-remove-artifacts@v1
+      with:
+        age: '7 days'
+        skip-recent: 5 

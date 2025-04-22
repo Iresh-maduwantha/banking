@@ -1,0 +1,272 @@
+name: Monitoring & Observability
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 * * * *'  # Run hourly
+
+jobs:
+  monitoring:
+    name: Monitoring & Observability
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18.x'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: |
+        cd banking-saas-app/frontend
+        npm ci
+    
+    # Distributed Tracing Setup
+    - name: Setup OpenTelemetry
+      run: |
+        cd banking-saas-app/frontend
+        npm install @opentelemetry/api @opentelemetry/sdk-node @opentelemetry/auto-instrumentations-node @opentelemetry/exporter-jaeger
+    
+    # Logging Infrastructure
+    - name: Setup Logging Infrastructure
+      run: |
+        cd banking-saas-app/frontend
+        npm install winston winston-daily-rotate-file
+    
+    # Custom Metrics and SLO Monitoring
+    - name: Setup Metrics Collection
+      run: |
+        cd banking-saas-app/frontend
+        npm install prom-client
+    
+    # Synthetic Monitoring
+    - name: Setup Synthetic Monitoring
+      run: |
+        cd banking-saas-app/frontend
+        npm install @synthetics/core
+    
+    # Create monitoring configuration files
+    - name: Create Monitoring Configuration
+      run: |
+        mkdir -p banking-saas-app/frontend/src/monitoring
+        
+        # Create OpenTelemetry configuration
+        cat > banking-saas-app/frontend/src/monitoring/tracing.js << 'EOF'
+        const { NodeSDK } = require('@opentelemetry/sdk-node');
+        const { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumentations-node');
+        const { JaegerExporter } = require('@opentelemetry/exporter-jaeger');
+        
+        const sdk = new NodeSDK({
+          traceExporter: new JaegerExporter({
+            endpoint: process.env.JAEGER_ENDPOINT || 'http://localhost:14268/api/traces',
+          }),
+          instrumentations: [getNodeAutoInstrumentations()],
+        });
+        
+        sdk.start();
+        
+        process.on('SIGTERM', () => {
+          sdk.shutdown()
+            .then(() => console.log('Tracing terminated'))
+            .catch((error) => console.log('Error terminating tracing', error))
+            .finally(() => process.exit(0));
+        });
+        
+        module.exports = sdk;
+        EOF
+        
+        # Create Winston logger configuration
+        cat > banking-saas-app/frontend/src/monitoring/logging.js << 'EOF'
+        const winston = require('winston');
+        const DailyRotateFile = require('winston-daily-rotate-file');
+        
+        const logger = winston.createLogger({
+          level: 'info',
+          format: winston.format.combine(
+            winston.format.timestamp(),
+            winston.format.json()
+          ),
+          defaultMeta: { service: 'banking-saas-app' },
+          transports: [
+            new DailyRotateFile({
+              filename: 'logs/error-%DATE%.log',
+              datePattern: 'YYYY-MM-DD',
+              zippedArchive: true,
+              maxSize: '20m',
+              maxFiles: '14d',
+              level: 'error',
+            }),
+            new DailyRotateFile({
+              filename: 'logs/combined-%DATE%.log',
+              datePattern: 'YYYY-MM-DD',
+              zippedArchive: true,
+              maxSize: '20m',
+              maxFiles: '14d',
+            }),
+          ],
+        });
+        
+        if (process.env.NODE_ENV !== 'production') {
+          logger.add(new winston.transports.Console({
+            format: winston.format.simple(),
+          }));
+        }
+        
+        module.exports = logger;
+        EOF
+        
+        # Create Prometheus metrics configuration
+        cat > banking-saas-app/frontend/src/monitoring/metrics.js << 'EOF'
+        const promClient = require('prom-client');
+        
+        // Create a Registry to register metrics
+        const register = new promClient.Registry();
+        promClient.collectDefaultMetrics({ register });
+        
+        // Custom metrics
+        const httpRequestDurationMicroseconds = new promClient.Histogram({
+          name: 'http_request_duration_seconds',
+          help: 'Duration of HTTP requests in seconds',
+          labelNames: ['method', 'route', 'status_code'],
+          buckets: [0.1, 0.5, 1, 2, 5],
+          registers: [register],
+        });
+        
+        const activeUsers = new promClient.Gauge({
+          name: 'active_users',
+          help: 'Number of active users',
+          registers: [register],
+        });
+        
+        const loginAttempts = new promClient.Counter({
+          name: 'login_attempts_total',
+          help: 'Total number of login attempts',
+          labelNames: ['status'],
+          registers: [register],
+        });
+        
+        module.exports = {
+          register,
+          httpRequestDurationMicroseconds,
+          activeUsers,
+          loginAttempts,
+        };
+        EOF
+        
+        # Create synthetic monitoring configuration
+        cat > banking-saas-app/frontend/src/monitoring/synthetic.js << 'EOF'
+        const { Synthetics } = require('@synthetics/core');
+        
+        const synthetics = new Synthetics({
+          apiKey: process.env.SYNTHETICS_API_KEY,
+        });
+        
+        // Define synthetic tests
+        const tests = [
+          {
+            name: 'Login Flow',
+            url: 'https://banking-saas-app.firebaseapp.com/login',
+            steps: [
+              { type: 'type', selector: '#email', value: 'test@example.com' },
+              { type: 'type', selector: '#password', value: 'password123' },
+              { type: 'click', selector: 'button[type="submit"]' },
+              { type: 'waitForNavigation' },
+              { type: 'assert', selector: '.dashboard-title', text: 'Welcome to your Dashboard' },
+            ],
+          },
+          {
+            name: 'Signup Flow',
+            url: 'https://banking-saas-app.firebaseapp.com/signup',
+            steps: [
+              { type: 'type', selector: '#email', value: 'newuser@example.com' },
+              { type: 'type', selector: '#password', value: 'password123' },
+              { type: 'type', selector: '#confirmPassword', value: 'password123' },
+              { type: 'click', selector: 'button[type="submit"]' },
+              { type: 'waitForNavigation' },
+              { type: 'assert', selector: '.dashboard-title', text: 'Welcome to your Dashboard' },
+            ],
+          },
+        ];
+        
+        module.exports = {
+          synthetics,
+          tests,
+        };
+        EOF
+        
+        # Create alerting configuration
+        cat > banking-saas-app/frontend/src/monitoring/alerts.js << 'EOF'
+        const logger = require('./logging');
+        
+        // Alert thresholds
+        const ALERT_THRESHOLDS = {
+          errorRate: 0.05, // 5% error rate
+          responseTime: 2000, // 2 seconds
+          availability: 0.99, // 99% availability
+        };
+        
+        // Alert handlers
+        const alertHandlers = {
+          errorRate: (value) => {
+            if (value > ALERT_THRESHOLDS.errorRate) {
+              logger.error(`Error rate exceeded threshold: ${value} > ${ALERT_THRESHOLDS.errorRate}`);
+              // In a real implementation, you would send notifications here
+              // e.g., via email, Slack, PagerDuty, etc.
+            }
+          },
+          responseTime: (value) => {
+            if (value > ALERT_THRESHOLDS.responseTime) {
+              logger.warn(`Response time exceeded threshold: ${value}ms > ${ALERT_THRESHOLDS.responseTime}ms`);
+            }
+          },
+          availability: (value) => {
+            if (value < ALERT_THRESHOLDS.availability) {
+              logger.error(`Availability below threshold: ${value} < ${ALERT_THRESHOLDS.availability}`);
+            }
+          },
+        };
+        
+        module.exports = {
+          ALERT_THRESHOLDS,
+          alertHandlers,
+        };
+        EOF
+    
+    # Run synthetic tests
+    - name: Run Synthetic Tests
+      run: |
+        cd banking-saas-app/frontend
+        node -e "
+          const { synthetics, tests } = require('./src/monitoring/synthetic');
+          
+          async function runTests() {
+            try {
+              for (const test of tests) {
+                console.log(`Running synthetic test: ${test.name}`);
+                const result = await synthetics.runTest(test);
+                console.log(`Test result: ${result.success ? 'PASSED' : 'FAILED'}`);
+                if (!result.success) {
+                  console.error(`Test failed: ${result.error}`);
+                }
+              }
+            } catch (error) {
+              console.error('Error running synthetic tests:', error);
+              process.exit(1);
+            }
+          }
+          
+          runTests();
+        "
+      env:
+        SYNTHETICS_API_KEY: ${{ secrets.SYNTHETICS_API_KEY }}
+    
+    # Upload monitoring configuration as artifacts
+    - name: Upload Monitoring Configuration
+      uses: actions/upload-artifact@v3
+      with:
+        name: monitoring-config
+        path: banking-saas-app/frontend/src/monitoring 
