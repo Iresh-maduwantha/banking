@@ -266,7 +266,7 @@ jobs:
     
     # Upload monitoring configuration as artifacts
     - name: Upload Monitoring Configuration
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v3.1.0  # Specify an exact version
       with:
         name: monitoring-config
-        path: banking-saas-app/frontend/src/monitoring 
+        path: banking-saas-app/frontend/src/monitoring
