@@ -86,4 +86,4 @@ jobs:
           fi
         fi
         
-        echo "Quality gates passed!" 
+        echo "Quality gates passed!"
